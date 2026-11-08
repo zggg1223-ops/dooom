@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>HELLGATE — Online &amp; Battles DLC</title>
+<title>HELLGATE — Online & Battles DLC</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000}
@@ -30,7 +30,7 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v,rand=(a,b)=>a+Math.random()*(b-a);
 const dist2=(ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay;return dx*dx+dy*dy};
 const dist=(ax,ay,bx,by)=>Math.sqrt(dist2(ax,ay,bx,by));
 
-const settings={lang:'en',volume:0.5,sensitivity:1.0,fov:75,showFPS:false,music:true,voice:true,playerName:''};
+const settings={lang:'ru',volume:0.5,sensitivity:1.0,fov:75,showFPS:false,music:true,voice:true,playerName:''};
 const saveSettings=()=>{try{localStorage.setItem('hg_dlc_v3',JSON.stringify(settings))}catch(e){}};
 try{const s=localStorage.getItem('hg_dlc_v3');if(s)Object.assign(settings,JSON.parse(s))}catch(e){}
 
@@ -214,6 +214,7 @@ function startHost(){
   cleanupDuel();
   const code=generateRoomCode();
   duel.roomCode=code;duel.isHost=true;duel.errorMsg='';duel.connecting=true;duel.connectTimer=0;
+  
   if(game.netMode==='browser'){
     try{
       duel.bcChannel=new BroadcastChannel('hg_ctf_'+code);
@@ -226,8 +227,14 @@ function startHost(){
   } else {
     if(typeof Peer==='undefined'){duel.errorMsg='PEERJS';duel.connecting=false;return}
     try{
-      const peerId=game.netMode==='wifi'?'hgw'+code:'hgd'+code;
-      duel.peer=new Peer(peerId,{debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}});
+      // Используем рабочий публичный сервер PeerJS
+      duel.peer=new Peer('hgd'+code, {
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        debug: 0,
+        config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}
+      });
       duel.peer.on('connection',conn=>{if(duel.conn&&duel.conn.open){try{conn.close()}catch(e){}return}duel.conn=conn;setupConnection()});
       duel.peer.on('error',err=>{duel.errorMsg=err.type||t('connErr');duel.connecting=false;sfx('error')});
     }catch(e){duel.errorMsg=String(e);duel.connecting=false}
@@ -238,6 +245,7 @@ function startJoin(code){
   if(!/^\d{4}$/.test(code)){duel.errorMsg='INVALID';sfx('error');return}
   cleanupDuel();
   duel.isHost=false;duel.roomCode=code;duel.errorMsg='';duel.connecting=true;duel.connectTimer=0;
+  
   if(game.netMode==='browser'){
     try{
       duel.bcChannel=new BroadcastChannel('hg_ctf_'+code);
@@ -251,9 +259,18 @@ function startJoin(code){
   } else {
     if(typeof Peer==='undefined'){duel.errorMsg='PEERJS';duel.connecting=false;return}
     try{
-      duel.peer=new Peer({debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}});
+      duel.peer=new Peer({
+        host: '0.peerjs.com',
+        port: 443,
+        secure: true,
+        debug: 0,
+        config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}
+      });
       duel.peer.on('open',()=>{
-        try{const peerId=game.netMode==='wifi'?'hgw'+code:'hgd'+code;duel.conn=duel.peer.connect(peerId,{reliable:true});setupConnection()}
+        try{
+          duel.conn=duel.peer.connect('hgd'+code,{reliable:true});
+          setupConnection()
+        }
         catch(e){duel.errorMsg=String(e);duel.connecting=false}
       });
       duel.peer.on('error',err=>{if(err.type==='peer-unavailable')duel.errorMsg='NO HOST '+code;else duel.errorMsg=err.type||t('connErr');duel.connecting=false;sfx('error')});
@@ -296,7 +313,6 @@ function handleNetData(data){
       const mx=data.x+Math.cos(data.a)*0.4,my=data.y+Math.sin(data.a)*0.4;
       spawnParticles(mx,my,4,0xffee44,1.5);
       duel.remotePlayer.muzzleFlash=1;
-      // Visible bullet
       particles.push({x:data.x,y:data.y,vx:Math.cos(data.a)*20,vy:Math.sin(data.a)*20,life:0.4,maxLife:0.4,color:0xffff44,size:3});
       sfx(w.sound,0.4);
       break;
@@ -304,7 +320,6 @@ function handleNetData(data){
     case'pk':{
       spawnParticles(data.x,data.y,10,0xffee00,1.5);
       sfx('pickup',0.3);
-      // Sync removal of pickup
       for(const p of pickups){if(p.alive&&dist2(p.x,p.y,data.x,data.y)<1){p.alive=false;break}}
       break;
     }
@@ -558,7 +573,6 @@ function shoot(){
   player.weaponCd=w.rate;player.muzzleFlash=1;player.recoil=1;
   shake(w.projectile?4:2);sfx(w.sound);
   if(duel.active&&game.mode==='ctf')netSend({type:'sh',w:player.currentWeapon,x:player.x,y:player.y,a:Math.atan2(player.dirY,player.dirX)});
-  // Visible bullet for all modes (except online — visual only for opponent)
   if(!duel.active){
     particles.push({x:player.x,y:player.y,vx:player.dirX*20,vy:player.dirY*20,life:0.4,maxLife:0.4,color:0xffff44,size:3});
   }
@@ -574,7 +588,6 @@ function hitscan(dx,dy,dmg){
   while(tr<20){
     x+=dx*step;y+=dy*step;tr+=step;
     if(x<0||y<0||x>=mapW||y>=mapH||map[y|0][x|0]!==0){
-      // Check glass
       if(x>=0&&y>=0&&x<mapW&&y<mapH&&map[y|0][x|0]===TILE_GLASS){
         map[y|0][x|0]=0;spawnParticles(x,y,25,0x88bbff,3);sfx('glass');
       } else spawnParticles(x,y,4,0x888888,0.5);
@@ -602,7 +615,6 @@ function explodeBarrel(b,visited){
   visited.add(b);b.alive=false;
   spawnParticles(b.x,b.y,40,0xff8800,4);spawnParticles(b.x,b.y,20,0xff2200,2);
   sfx('explosion');shake(8);
-  // Break glass in radius
   for(let cy=Math.floor(b.y-3);cy<=Math.floor(b.y+3);cy++){
     for(let cx=Math.floor(b.x-3);cx<=Math.floor(b.x+3);cx++){
       if(cx>=0&&cy>=0&&cx<mapW&&cy<mapH&&map[cy][cx]===TILE_GLASS&&dist(b.x,b.y,cx+0.5,cy+0.5)<3){
@@ -620,7 +632,6 @@ function damageCrate(c,dmg){
   c.hp-=dmg;c.hurt=0.15;
   if(c.hp<=0){c.alive=false;
     spawnParticles(c.x,c.y,25,0xa86a3a,2);sfx('crate');
-    // Drop random pickup
     const r=Math.random();
     let type=r<0.5?'health':r<0.75?'shells':'bullets';
     pickups.push({x:c.x,y:c.y,type,sprite:type,alive:true,bob:Math.random()*TAU});
@@ -638,7 +649,6 @@ function damagePlayer(dmg,sx,sy){
     if(game.mode==='ctfBots'){
       player.alive=false;duel.respawnTimer=3;dropMyFlag();sfx('death');shake(8);
     } else if(duel.active){
-      // Handled by caller
     } else {
       game.state='dead';if(document.pointerLockElement)document.exitPointerLock();stopMusic();
     }
@@ -691,7 +701,6 @@ function updateBot(bot,dt){
     if(bot.weaponCd<=0){
       bot.weaponCd=0.6;bot.muzzleFlash=1;
       sfx('shotgun',0.3);
-      // Visible bullet
       particles.push({x:bot.x,y:bot.y,vx:bot.dirX*20,vy:bot.dirY*20,life:0.4,maxLife:0.4,color:bot.team==='red'?0xff6644:0x4488ff,size:3});
       const spread=(Math.random()-0.5)*0.15;
       const ca=Math.cos(spread),sa=Math.sin(spread);
@@ -845,7 +854,6 @@ function computeFlipFor(bot){const dx=bot.x-player.x,dy=bot.y-player.y;const a=M
 
 function renderSprites(){
   const list=[];
-  // === FLOOR ZONES ===
   if(game.mode==='zone'){
     const pulse=0.35+0.15*Math.sin(game.time*3);
     list.push({x:ZONE.x,y:ZONE.y,data:null,color:'#00ff00',scaleX:ZONE.radius*2.2,scaleY:ZONE.radius*0.55,vOffset:0.5,alpha:pulse,isZone:true});
@@ -859,7 +867,6 @@ function renderSprites(){
     const rColor=rf.cooldown>0?'#666666':(rf.carrier?'#553344':'#ff2222');
     list.push({x:CTF_RED_BASE.x,y:CTF_RED_BASE.y,data:null,color:rColor,scaleX:CTF_BASE_RADIUS*2,scaleY:CTF_BASE_RADIUS*0.55,vOffset:0.45,alpha:rf.cooldown>0?0.2:0.45,isZone:true});
   }
-  // Remote player
   if(duel.active&&duel.remotePlayer.alive){
     const skin=duel.remotePlayer.team==='red'?'red':'blue';
     const wpn=duel.remotePlayer.weapon||'pistol';
@@ -869,14 +876,12 @@ function renderSprites(){
       list.push({x:duel.remotePlayer.x,y:duel.remotePlayer.y,data:flagSprites[duel.remotePlayer.carryingFlag],scale:0.8,vOffset:-0.6,alpha:1,wave:true});
     }
   }
-  // Bots
   for(const bot of bots.list){
     if(!bot.alive)continue;
     const flip=computeFlipFor(bot);
     list.push({x:bot.x,y:bot.y,data:robotSprites[bot.team],scale:1.0,vOffset:0,alpha:1,bot,flip});
     if(bot.carryingFlag){list.push({x:bot.x,y:bot.y,data:flagSprites[bot.carryingFlag],scale:0.7,vOffset:-0.55,alpha:1,wave:true})}
   }
-  // Flags on ground
   if(game.mode==='ctf'||game.mode==='ctfBots'){
     for(const c of ['blue','red']){
       const f=flags[c];
@@ -938,7 +943,6 @@ function drawSprite(s){
       }
     }
   } else {
-    // Ellipse for zones and particles
     const cx=(dx0+dx1)/2,cy=(dy0+dy1)/2;
     const rx=Math.max(1,(dx1-dx0)/2),ry=Math.max(1,(dy1-dy0)/2);
     let r,g,b;
@@ -1008,7 +1012,6 @@ function drawHUD(){
     ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(W/2-5,H/2);ctx.lineTo(W/2-2,H/2);ctx.moveTo(W/2+2,H/2);ctx.lineTo(W/2+5,H/2);ctx.moveTo(W/2,H/2-5);ctx.lineTo(W/2,H/2-2);ctx.moveTo(W/2,H/2+2);ctx.lineTo(W/2,H/2+5);ctx.stroke();
   }
-  // Flag hints
   if((game.mode==='ctf'||game.mode==='ctfBots')&&!player.carryingFlag&&player.alive){
     const enemyFlag=player.team==='blue'?flags.red:flags.blue;
     if(!enemyFlag.carrier&&enemyFlag.cooldown<=0&&dist(player.x,player.y,enemyFlag.x,enemyFlag.y)<0.9){
@@ -1361,7 +1364,6 @@ function update(dt){
       while(ad>Math.PI)ad-=TAU;while(ad<-Math.PI)ad+=TAU;
       duel.remotePlayer.angle+=ad*lspd;
     }
-    // Respawn (works for both online and bots)
     if(!player.alive&&duel.respawnTimer>0){
       duel.respawnTimer-=dt;
       if(duel.respawnTimer<=0)respawnPlayer();
